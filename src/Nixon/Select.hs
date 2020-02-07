@@ -3,6 +3,7 @@ module Nixon.Select
   , Selection (..)
   , SelectionType (..)
   , Selector
+  , Selectable (..)
   , build_map
   , default_selection
   , runSelect
@@ -27,9 +28,21 @@ instance Functor Selection where
   fmap _ EmptySelection = EmptySelection
   fmap _ CanceledSelection =  CanceledSelection
 
-type Selector = Shell Line -> IO (Selection Text)
+type Selector s = Shell s -> IO (Selection s)
 
-type Select a = ReaderT Selector IO a
+type Select s = ReaderT (Selector s) IO s
+
+-- | Class to represent selectable values
+class Selectable s where
+  -- | The value to substitute for the selectable entry
+  selectValue :: s -> Text
+
+  -- | The pretty-printed value of a selectable (for selection)
+  selectDisplay :: s -> Text
+  selectDisplay = selectValue
+
+instance Selectable Text where
+  selectValue = id
 
 default_selection :: a -> Selection a -> a
 default_selection _ (Selection _ value) = value
@@ -38,10 +51,10 @@ default_selection def _ = def
 build_map :: (a -> Text) -> [a] -> Map.Map Text a
 build_map f = Map.fromList . map (f &&& id)
 
-runSelect :: Selector -> Select a -> IO a
+runSelect :: Selector s -> Select s -> IO s
 runSelect = flip runReaderT
 
-select :: Shell Line -> Select (Selection Text)
+select :: Selectable s => Shell s -> Select (Selection s)
 select input = do
   select' <- ask
   liftIO $ select' input
